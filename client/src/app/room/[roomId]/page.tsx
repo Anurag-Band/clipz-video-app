@@ -34,6 +34,9 @@ export default function RoomPage() {
     isRecording,
     recordingStartTime,
     recordedBlob,
+    isConnected,
+    isConnecting,
+    connectionError,
     toggleCamera,
     toggleMic,
     toggleScreenShare,
@@ -47,22 +50,29 @@ export default function RoomPage() {
 
   // Initialize room
   useEffect(() => {
+    // Track if the component is mounted
+    let isMounted = true;
+
     const initializeRoom = async () => {
       try {
+        if (!isMounted) return;
+
         setIsInitializing(true);
         setError(null);
 
-        // Join room
-        await joinRoom(roomId);
-
-        // Enable camera by default
+        // Enable camera by default if not already enabled
         if (!cameraEnabled) {
           await toggleCamera();
         }
 
+        // Join room after camera is enabled
+        await joinRoom(roomId);
+
+        if (!isMounted) return;
         setIsInitializing(false);
       } catch (error) {
         console.error('Error initializing room:', error);
+        if (!isMounted) return;
         setError(`Failed to initialize room: ${error instanceof Error ? error.message : String(error)}`);
         setIsInitializing(false);
       }
@@ -72,9 +82,25 @@ export default function RoomPage() {
 
     // Clean up on unmount
     return () => {
+      isMounted = false;
       leaveRoom();
     };
-  }, [roomId, joinRoom, leaveRoom, cameraEnabled, toggleCamera]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
+
+  // Monitor connection state
+  useEffect(() => {
+    if (isConnected) {
+      console.log('Successfully connected to the room');
+      setIsInitializing(false);
+    }
+
+    if (connectionError) {
+      console.error('Connection error:', connectionError);
+      setError(`Connection error: ${connectionError}`);
+      setIsInitializing(false);
+    }
+  }, [isConnected, connectionError]);
 
   // Handle recording with canvas PiP
   const handleStartRecording = async () => {

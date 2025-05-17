@@ -15,14 +15,21 @@ export function initializeSocket(): Socket {
   if (socket) return socket;
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+  console.log('Connecting to socket server at:', API_URL);
+
+  // Connect to the base URL, not the API endpoint
   socket = io(API_URL);
 
   socket.on("connect", () => {
-    console.log("Connected to signaling server");
+    console.log("Connected to signaling server with ID:", socket?.id);
   });
 
-  socket.on("disconnect", () => {
-    console.log("Disconnected from signaling server");
+  socket.on("connect_error", (error) => {
+    console.error("Socket connection error:", error);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log("Disconnected from signaling server:", reason);
   });
 
   return socket;
@@ -37,6 +44,17 @@ export async function joinRoom(roomId: string): Promise<void> {
   const userId = await getUserId();
 
   socket.emit("join-room", roomId, userId);
+}
+
+/**
+ * Leave a room
+ * @param roomId Room ID to leave
+ */
+export async function leaveRoom(roomId: string): Promise<void> {
+  const socket = initializeSocket();
+  const userId = await getUserId();
+
+  socket.emit("leave-room", roomId, userId);
 }
 
 /**

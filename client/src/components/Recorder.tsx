@@ -22,10 +22,10 @@ export default function Recorder({ className = '' }: RecorderProps) {
   // Refs
   const recorderRef = useRef<MediaRecorder | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  
+
   // Local state
   const [previewOpen, setPreviewOpen] = useState(false);
-  
+
   // Global state
   const {
     cameraStream,
@@ -68,7 +68,7 @@ export default function Recorder({ className = '' }: RecorderProps) {
         // Create recorder
         const recorder = createRecorder(canvasStream);
         recorderRef.current = recorder;
-        
+
         // Start recording
         startRecording(recorder);
       } catch (error) {
@@ -81,25 +81,49 @@ export default function Recorder({ className = '' }: RecorderProps) {
         stopRecording(recorderRef.current).then((blob) => {
           setRecordedBlob(blob);
           recorderRef.current = null;
+
+          // Automatically upload the recording when it stops
+          if (blob) {
+            // Small delay to ensure the blob is properly set in state
+            setTimeout(() => {
+              startUpload();
+              uploadRecording(
+                blob,
+                `recording-${Date.now()}.webm`,
+                updateUploadProgress
+              )
+                .then((result) => {
+                  if (result.success && result.url) {
+                    setUploadedUrl(result.url);
+                  } else {
+                    setUploadError(result.error || 'Automatic upload failed');
+                  }
+                })
+                .catch((error) => {
+                  console.error('Error in automatic upload:', error);
+                  setUploadError(`Automatic upload failed: ${error instanceof Error ? error.message : String(error)}`);
+                });
+            }, 100);
+          }
         });
       } catch (error) {
         console.error('Error stopping recording:', error);
         recorderRef.current = null;
       }
     }
-  }, [isRecording, canvasStream, setRecordedBlob, stopRecordingState]);
+  }, [isRecording, canvasStream, setRecordedBlob, stopRecordingState, startUpload, updateUploadProgress, setUploadedUrl, setUploadError]);
 
   // Handle download recording
   const handleDownload = () => {
     if (!recordedBlob) return;
-    
+
     const url = URL.createObjectURL(recordedBlob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `recording-${Date.now()}.webm`;
     document.body.appendChild(a);
     a.click();
-    
+
     // Clean up
     setTimeout(() => {
       document.body.removeChild(a);
@@ -110,16 +134,16 @@ export default function Recorder({ className = '' }: RecorderProps) {
   // Handle upload recording
   const handleUpload = async () => {
     if (!recordedBlob) return;
-    
+
     try {
       startUpload();
-      
+
       const result = await uploadRecording(
         recordedBlob,
         `recording-${Date.now()}.webm`,
         updateUploadProgress
       );
-      
+
       if (result.success && result.url) {
         setUploadedUrl(result.url);
       } else {
@@ -142,7 +166,7 @@ export default function Recorder({ className = '' }: RecorderProps) {
         <CardHeader>
           <CardTitle>Recording</CardTitle>
         </CardHeader>
-        
+
         <CardContent>
           {recordedBlob && (
             <video
@@ -151,14 +175,20 @@ export default function Recorder({ className = '' }: RecorderProps) {
               className="w-full rounded-md"
             />
           )}
-          
+
           {isRecording && (
             <div className="flex items-center justify-center h-40 bg-muted rounded-md">
               <p className="text-muted-foreground">Recording in progress...</p>
             </div>
           )}
+
+          {!isRecording && isUploading && !uploadedUrl && !uploadError && (
+            <div className="flex items-center justify-center mt-2">
+              <p className="text-sm text-muted-foreground">Automatically uploading recording...</p>
+            </div>
+          )}
         </CardContent>
-        
+
         <CardFooter className="flex justify-between">
           {recordedBlob && !isRecording && (
             <>
@@ -170,7 +200,7 @@ export default function Recorder({ className = '' }: RecorderProps) {
                 <Play className="h-4 w-4" />
                 Preview
               </Button>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -180,21 +210,21 @@ export default function Recorder({ className = '' }: RecorderProps) {
                   <Download className="h-4 w-4" />
                   Download
                 </Button>
-                
+
                 <Button
                   onClick={handleUpload}
                   disabled={isUploading}
                   className="flex items-center gap-2"
                 >
                   <Upload className="h-4 w-4" />
-                  Upload
+                  {uploadedUrl || uploadError ? 'Re-upload' : 'Upload'}
                 </Button>
               </div>
             </>
           )}
         </CardFooter>
       </Card>
-      
+
       {/* Upload progress */}
       {(isUploading || uploadedUrl || uploadError) && (
         <UploadProgress
@@ -209,14 +239,14 @@ export default function Recorder({ className = '' }: RecorderProps) {
           className="mt-4"
         />
       )}
-      
+
       {/* Preview dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Recording Preview</DialogTitle>
           </DialogHeader>
-          
+
           {recordedBlob && (
             <video
               src={URL.createObjectURL(recordedBlob)}

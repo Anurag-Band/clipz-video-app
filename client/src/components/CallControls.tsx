@@ -72,6 +72,13 @@ export default function CallControls({
 
   // Handle end call
   const handleEndCall = () => {
+    // If recording is in progress, stop it first
+    if (isRecording) {
+      stopRecording();
+      if (onStopRecording) onStopRecording();
+    }
+
+    // Leave the room and redirect
     leaveRoom();
     router.push("/");
   };
